@@ -9,6 +9,10 @@ pub mod agent_defs;
 pub mod branding;
 pub mod cancel;
 mod cli_completer;
+/// ChatGPT/Codex OAuth token model (ported from themion).
+pub mod codex_auth;
+/// ChatGPT/Codex auth file persistence under `~/.config/thclaws/auth/`.
+pub mod codex_auth_store;
 pub mod commands;
 pub mod compaction;
 pub mod config;
@@ -35,6 +39,8 @@ pub mod instructions;
 pub mod ipc;
 pub mod kms;
 pub mod line;
+/// ChatGPT OAuth device-code flow for the `chatgpt-codex` provider.
+pub mod login_codex;
 pub mod marketplace;
 pub mod mcp;
 pub mod memory;

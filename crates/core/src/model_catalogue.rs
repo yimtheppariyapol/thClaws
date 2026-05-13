@@ -663,6 +663,7 @@ pub fn provider_kind_name(k: crate::providers::ProviderKind) -> &'static str {
         ProviderKind::AgentSdk => "agent-sdk",
         ProviderKind::OpenAI => "openai",
         ProviderKind::OpenAIResponses => "openai-responses",
+        ProviderKind::ChatGptCodex => "chatgpt-codex",
         ProviderKind::OpenRouter => "openrouter",
         ProviderKind::Gemini => "gemini",
         ProviderKind::Ollama => "ollama",

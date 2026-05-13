@@ -3129,6 +3129,35 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn Provider>> {
                     .with_strip_model_prefix("lmstudio/"),
             ));
         }
+        ProviderKind::ChatGptCodex => {
+            // ChatGPT-subscription Codex auth: read CodexAuth from
+            // ~/.config/thclaws/auth/default.json, falling back to legacy
+            // ~/.config/thclaws/auth.json, falling back to importing
+            // ~/.codex/auth.json (the Codex CLI's own auth file). No env
+            // var fallback — if the user hasn't run `codex login` yet,
+            // we error with a clear hint.
+            let profile = "default";
+            let auth = crate::codex_auth_store::resolve_for_profile(profile)?
+                .ok_or_else(|| {
+                    Error::Config(
+                        "no ChatGPT/Codex auth found — run `codex login` (Codex CLI) \
+                         to create ~/.codex/auth.json, or save your own \
+                         ~/.config/thclaws/auth/default.json"
+                            .to_string(),
+                    )
+                })?;
+            // The base URL is fixed — chatgpt.com/backend-api/codex/responses
+            // is undocumented and locked to match themion's known-good
+            // wire shape. Token refresh isn't implemented yet (v1 patch);
+            // if the access_token expires, the user re-runs `codex login`.
+            return Ok(Arc::new(
+                crate::providers::openai_responses::OpenAIResponsesProvider::new(
+                    auth.access_token.clone(),
+                )
+                .with_base_url("https://chatgpt.com/backend-api/codex/responses")
+                .with_chatgpt_account_id(auth.account_id.clone()),
+            ));
+        }
         _ => {}
     }
 
@@ -3328,7 +3357,8 @@ pub fn build_provider(config: &AppConfig) -> Result<Arc<dyn Provider>> {
         ProviderKind::Ollama
         | ProviderKind::OllamaAnthropic
         | ProviderKind::LMStudio
-        | ProviderKind::AgentSdk => {
+        | ProviderKind::AgentSdk
+        | ProviderKind::ChatGptCodex => {
             unreachable!("handled above")
         }
         ProviderKind::OllamaCloud => Ok(Arc::new(OllamaCloudProvider::new(api_key))),

@@ -61,6 +61,13 @@ pub enum ProviderKind {
     AgentSdk,
     OpenAI,
     OpenAIResponses,
+    /// ChatGPT-subscription Codex auth path. Same Responses-API wire
+    /// shape as [`OpenAIResponses`] but targets `chatgpt.com/backend-api/codex`
+    /// with a Bearer access_token (from [`crate::codex_auth`]) plus the
+    /// `chatgpt-account-id` / `originator` / `OpenAI-Beta` headers. Auth
+    /// is read from `~/.config/thclaws/auth/<profile>.json` (auto-imported
+    /// from `~/.codex/auth.json` if absent).
+    ChatGptCodex,
     OpenRouter,
     Gemini,
     Ollama,
@@ -89,6 +96,7 @@ impl ProviderKind {
         Self::AgentSdk,
         Self::OpenAI,
         Self::OpenAIResponses,
+        Self::ChatGptCodex,
         Self::OpenRouter,
         Self::Gemini,
         Self::Ollama,
@@ -113,6 +121,7 @@ impl ProviderKind {
             Self::AgentSdk => "anthropic-agent",
             Self::OpenAI => "openai",
             Self::OpenAIResponses => "openai-responses",
+            Self::ChatGptCodex => "chatgpt-codex",
             Self::OpenRouter => "openrouter",
             Self::Gemini => "gemini",
             Self::Ollama => "ollama",
@@ -138,6 +147,7 @@ impl ProviderKind {
             Self::AgentSdk => "agent/claude-sonnet-4-6",
             Self::OpenAI => "gpt-4o",
             Self::OpenAIResponses => "codex/gpt-5.2-codex",
+            Self::ChatGptCodex => "chatgpt-codex/gpt-5.4",
             Self::OpenRouter => "openrouter/anthropic/claude-sonnet-4-6",
             // Pinned to a versioned ID (matching Anthropic / OpenAI
             // convention) rather than `gemini-flash-latest` — `-latest`
@@ -304,6 +314,9 @@ impl ProviderKind {
             Self::AgentSdk => None, // Uses Claude Code's own auth
             Self::OpenAI => Some("OPENAI_API_KEY"),
             Self::OpenAIResponses => Some("OPENAI_API_KEY"),
+            // ChatGptCodex auths via OAuth access_token stored in
+            // ~/.config/thclaws/auth/<profile>.json — no env var.
+            Self::ChatGptCodex => None,
             Self::OpenRouter => Some("OPENROUTER_API_KEY"),
             Self::Gemini => Some("GEMINI_API_KEY"),
             Self::Ollama => None,
@@ -407,6 +420,7 @@ impl ProviderKind {
             // surprise-switching to a different provider.
             Self::OpenAI
             | Self::OpenAIResponses
+            | Self::ChatGptCodex
             | Self::AgentSdk
             | Self::Ollama
             | Self::OllamaAnthropic
@@ -437,6 +451,11 @@ impl ProviderKind {
             Some(Self::AgentSdk)
         } else if model.starts_with("claude-") {
             Some(Self::Anthropic)
+        } else if model.starts_with("chatgpt-codex/") {
+            // ChatGPT-subscription Codex path — MUST be checked before the
+            // bare `codex/` / `model.contains("codex")` arm below, else
+            // the broader match steals the route.
+            Some(Self::ChatGptCodex)
         } else if model.starts_with("codex/") || model.contains("codex") {
             Some(Self::OpenAIResponses)
         } else if model.starts_with("gpt-")

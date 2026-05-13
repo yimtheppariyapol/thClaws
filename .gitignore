@@ -37,6 +37,12 @@ config.json
 # Local-only agent guidance (kept out of the public repo)
 CLAUDE.md
 
+# Per-machine Claude Code hook wiring (contains absolute paths to local
+# tooling). The INCUBATED_BY breadcrumb is committable; settings.json isn't.
+.claude/settings.json
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
 # OS
 .DS_Store
 Thumbs.db

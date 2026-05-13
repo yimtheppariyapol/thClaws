@@ -32,6 +32,14 @@ pub struct OpenAIResponsesProvider {
     base_url: String,
     /// Last response ID for server-side history continuation.
     last_response_id: Arc<Mutex<Option<String>>>,
+    /// Set when targeting `chatgpt.com/backend-api/codex` with a ChatGPT
+    /// subscription OAuth token (see [`crate::codex_auth`]). When `Some`,
+    /// the provider sends three additional headers on every request:
+    /// - `chatgpt-account-id: <value>`
+    /// - `originator: pi`
+    /// - `OpenAI-Beta: responses=experimental`
+    /// When `None`, behaves as the regular API-key Responses-API client.
+    chatgpt_account_id: Option<String>,
 }
 
 impl OpenAIResponsesProvider {
@@ -41,6 +49,7 @@ impl OpenAIResponsesProvider {
             api_key: api_key.into(),
             base_url: DEFAULT_API_URL.to_string(),
             last_response_id: Arc::new(Mutex::new(None)),
+            chatgpt_account_id: None,
         }
     }
 
@@ -49,8 +58,35 @@ impl OpenAIResponsesProvider {
         self
     }
 
-    /// Strip the `codex/` prefix if present.
+    /// Enable ChatGPT-subscription auth mode. The `api_key` passed to `new()`
+    /// is treated as a Bearer **access_token** (not an API key) and the three
+    /// `chatgpt-account-id` / `originator` / `OpenAI-Beta` headers get sent
+    /// alongside `authorization`. Combine with
+    /// `with_base_url("https://chatgpt.com/backend-api/codex/responses")`.
+    pub fn with_chatgpt_account_id(mut self, account_id: impl Into<String>) -> Self {
+        self.chatgpt_account_id = Some(account_id.into());
+        self
+    }
+
+    /// Add Codex-specific headers when `chatgpt_account_id` is set.
+    /// No-op for the standard API-key path.
+    fn apply_codex_headers(&self, mut rb: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        if let Some(ref acc) = self.chatgpt_account_id {
+            rb = rb
+                .header("chatgpt-account-id", acc)
+                .header("originator", "pi")
+                .header("OpenAI-Beta", "responses=experimental");
+        }
+        rb
+    }
+
+    /// Strip the `codex/` or `chatgpt-codex/` prefix if present. The wire
+    /// model id is what the server expects (`gpt-5.4`, `gpt-5.2-codex`, etc.) —
+    /// our routing prefixes are local-only.
     fn model_id(model: &str) -> &str {
+        if let Some(rest) = model.strip_prefix("chatgpt-codex/") {
+            return rest;
+        }
         model.strip_prefix("codex/").unwrap_or(model)
     }
 
@@ -123,6 +159,14 @@ impl OpenAIResponsesProvider {
             "stream": true,
         });
 
+        // ChatGPT-subscription Codex (chatgpt.com/backend-api/codex) requires
+        // `store: false` explicitly — server returns 400 "Store must be set to
+        // false" otherwise. Paid OpenAI defaults to store: true so we only
+        // pin this when we're in chatgpt-codex mode.
+        if self.chatgpt_account_id.is_some() {
+            body["store"] = json!(false);
+        }
+
         // System prompt → instructions field.
         if let Some(sys) = &req.system {
             if !sys.is_empty() {
@@ -130,14 +174,24 @@ impl OpenAIResponsesProvider {
             }
         }
 
-        if req.max_tokens > 0 {
+        // ChatGPT-subscription Codex rejects `max_output_tokens` (server returns
+        // 400 "Unsupported parameter"). Send it only on the paid API-key path.
+        if req.max_tokens > 0 && self.chatgpt_account_id.is_none() {
             body["max_output_tokens"] = json!(req.max_tokens);
         }
 
         // Server-side history: continue from last response.
-        if let Ok(guard) = self.last_response_id.lock() {
-            if let Some(ref id) = *guard {
-                body["previous_response_id"] = json!(id);
+        // ChatGPT-subscription Codex rejects `previous_response_id` outright
+        // (server returns 400 "Unsupported parameter"). The subscription path
+        // sets `store: false` so cross-session continuation isn't supported
+        // anyway. themion uses previous_response_id only for in-stream
+        // continuation (response.completed end_turn:false) — a separate flow
+        // we don't implement in this initial port.
+        if self.chatgpt_account_id.is_none() {
+            if let Ok(guard) = self.last_response_id.lock() {
+                if let Some(ref id) = *guard {
+                    body["previous_response_id"] = json!(id);
+                }
             }
         }
 
@@ -168,9 +222,11 @@ impl Provider for OpenAIResponsesProvider {
         let models_url = self.base_url.replace("/responses", "/models");
 
         let resp = self
-            .client
-            .get(&models_url)
-            .header("authorization", format!("Bearer {}", self.api_key))
+            .apply_codex_headers(
+                self.client
+                    .get(&models_url)
+                    .header("authorization", format!("Bearer {}", self.api_key)),
+            )
             .send()
             .await
             .map_err(|e| Error::Provider(format!("http: {e}")))?;
@@ -208,10 +264,12 @@ impl Provider for OpenAIResponsesProvider {
     async fn stream(&self, req: super::StreamRequest) -> Result<EventStream> {
         let body = self.build_body(&req);
         let resp = self
-            .client
-            .post(&self.base_url)
-            .header("authorization", format!("Bearer {}", self.api_key))
-            .header("content-type", "application/json")
+            .apply_codex_headers(
+                self.client
+                    .post(&self.base_url)
+                    .header("authorization", format!("Bearer {}", self.api_key))
+                    .header("content-type", "application/json"),
+            )
             .json(&body)
             .send()
             .await

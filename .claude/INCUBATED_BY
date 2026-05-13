@@ -1,0 +1,7 @@
+oracle: thclaws-oracle
+oracle-repo: https://github.com/Soul-Brews-Studio/thclaws-oracle
+date: 2026-05-13
+mode: default
+source: https://github.com/Soul-Brews-Studio/thClaws
+upstream: https://github.com/thClaws/thClaws
+learned-from: ψ/learn/thClaws/thClaws/
