@@ -444,9 +444,8 @@ fn tool_use_completed_chunk(
     name: &str,
     output: &std::result::Result<String, String>,
 ) -> Event {
-    Event::default().data(
-        tool_use_completed_body(chunk_id, created, model, tool_id, name, output).to_string(),
-    )
+    Event::default()
+        .data(tool_use_completed_body(chunk_id, created, model, tool_id, name, output).to_string())
 }
 
 fn tool_use_denied_body(
@@ -521,9 +520,7 @@ fn split_messages(
     messages: &[ChatMessage],
 ) -> crate::error::Result<(Vec<Message>, String, Option<String>)> {
     if messages.is_empty() {
-        return Err(crate::error::Error::Tool(
-            "messages array is empty".into(),
-        ));
+        return Err(crate::error::Error::Tool("messages array is empty".into()));
     }
 
     // Find the last user message — that's the prompt. Everything before
@@ -723,17 +720,14 @@ mod tests {
     fn tool_use_completed_body_distinguishes_ok_and_err() {
         let ok = tool_use_completed_body("id", 1, "m", "tu", "Read", &Ok("file contents".into()));
         assert_eq!(ok["x_thclaws_tool_use"]["status"], "completed");
-        assert_eq!(ok["x_thclaws_tool_use"]["output"]["preview"], "file contents");
+        assert_eq!(
+            ok["x_thclaws_tool_use"]["output"]["preview"],
+            "file contents"
+        );
         assert_eq!(ok["x_thclaws_tool_use"]["output"]["truncated"], false);
 
-        let err = tool_use_completed_body(
-            "id",
-            1,
-            "m",
-            "tu",
-            "Read",
-            &Err("permission denied".into()),
-        );
+        let err =
+            tool_use_completed_body("id", 1, "m", "tu", "Read", &Err("permission denied".into()));
         assert_eq!(err["x_thclaws_tool_use"]["status"], "error");
         assert_eq!(
             err["x_thclaws_tool_use"]["output"]["preview"],
