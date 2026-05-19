@@ -239,6 +239,7 @@ pub async fn dispatch(
                 verified_at: None,
                 free: None,
                 chat: None,
+                ..Default::default()
             };
             let cat = crate::model_catalogue::EffectiveCatalogue::load();
             let warn = cat.lookup_exact(&key).map(|n| size > n).unwrap_or(false);
@@ -379,6 +380,7 @@ pub async fn dispatch(
                                             verified_at: None,
                                             free: None,
                                             chat: None,
+                                            ..Default::default()
                                         },
                                     ));
                                 }
@@ -3207,6 +3209,7 @@ async fn switch_model(
                         verified_at: Some(crate::model_catalogue::today_iso()),
                         free: None,
                         chat: None,
+                        ..Default::default()
                     };
                     match crate::model_catalogue::upsert_cache_entry(provider_key, &model_id, entry)
                     {
