@@ -388,6 +388,34 @@ impl SkillStore {
         store
     }
 
+    /// Workspace-scoped discovery. Mirrors [`Self::discover_with_extra`]
+    /// but joins the project skill dirs (`.claude/skills`,
+    /// `.thclaws/skills`) onto the supplied `workspace_dir` rather than
+    /// the process CWD. Used by the `/agent/run` endpoint where each
+    /// request carries its own per-agent workspace path — see
+    /// `dev-plan/25-thclaws-as-agent.md`.
+    pub fn discover_in(workspace_dir: &Path, extra: &[PathBuf]) -> Self {
+        let mut store = Self::default();
+        store.seed_builtins();
+        for dir in Self::user_skill_dirs() {
+            if dir.exists() {
+                store.load_dir(&dir);
+            }
+        }
+        for dir in extra {
+            if dir.exists() {
+                store.load_dir(dir);
+            }
+        }
+        for rel in Self::project_skill_dirs() {
+            let dir = workspace_dir.join(rel);
+            if dir.exists() {
+                store.load_dir(&dir);
+            }
+        }
+        store
+    }
+
     /// Seed the store with skills compiled into the binary. Each entry
     /// pairs a fallback name (used when the embedded markdown has no
     /// `name:` frontmatter) with the embedded SKILL.md source. Pure-
@@ -1764,6 +1792,64 @@ mod tests {
             .unwrap()
             .content()
             .contains("{skill_dir}"));
+    }
+
+    #[test]
+    fn discover_in_finds_skills_in_workspace_subdirs() {
+        // Workspace-scoped discovery: `.thclaws/skills/<name>/SKILL.md`
+        // and `.claude/skills/<name>/SKILL.md` resolved against the
+        // supplied workspace_dir, not the process CWD. Critical for
+        // `/agent/run` where each request carries its own workspace.
+        let workspace = tempdir().unwrap();
+        let thclaws_dir = workspace.path().join(".thclaws/skills");
+        let claude_dir = workspace.path().join(".claude/skills");
+        std::fs::create_dir_all(&thclaws_dir).unwrap();
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        create_skill(
+            &thclaws_dir,
+            "deploy",
+            "---\nname: deploy\ndescription: Deploy to staging\n---\nbody",
+            &[],
+        );
+        create_skill(
+            &claude_dir,
+            "lint",
+            "---\nname: lint\ndescription: Run linters\n---\nbody",
+            &[],
+        );
+
+        let store = SkillStore::discover_in(workspace.path(), &[]);
+        assert!(
+            store.get("deploy").is_some(),
+            "should find .thclaws/skills/deploy"
+        );
+        assert!(
+            store.get("lint").is_some(),
+            "should find .claude/skills/lint"
+        );
+    }
+
+    #[test]
+    fn discover_in_ignores_skills_outside_workspace() {
+        // Skills in some other directory must NOT leak into the
+        // workspace-scoped store — that's the isolation contract for
+        // multi-agent daemons.
+        let workspace = tempdir().unwrap();
+        let unrelated = tempdir().unwrap();
+        let unrelated_thclaws = unrelated.path().join(".thclaws/skills");
+        std::fs::create_dir_all(&unrelated_thclaws).unwrap();
+        create_skill(
+            &unrelated_thclaws,
+            "leak",
+            "---\nname: leak\ndescription: should not appear\n---\nbody",
+            &[],
+        );
+
+        let store = SkillStore::discover_in(workspace.path(), &[]);
+        assert!(
+            store.get("leak").is_none(),
+            "skill in unrelated workspace must not appear in this workspace's store"
+        );
     }
 
     // ── built-in skills (seed_builtins) ──────────────────────────────

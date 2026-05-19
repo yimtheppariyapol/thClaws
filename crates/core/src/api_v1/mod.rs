@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use axum::Router;
 
+pub mod agent;
 pub mod callback;
 pub mod chat;
 pub mod errors;
@@ -24,10 +25,18 @@ pub mod models;
 
 /// Build the `/v1/*` sub-router. Mounted into the main server router
 /// by [`crate::server::run_with_engine`].
+///
+/// Routes:
+/// - `GET  /v1/models`            — OpenAI-compatible model listing.
+/// - `POST /v1/chat/completions`  — OpenAI-compatible chat (sync + SSE + x_callback).
+/// - `POST /agent/run`            — thClaws-native agent endpoint with
+///   per-request `workspace_dir` for skill / MCP / plugin scoping
+///   (see `dev-plan/25-thclaws-as-agent.md`).
 pub fn router() -> Router {
     Router::new()
         .route("/v1/models", get(models::list_models))
         .route("/v1/chat/completions", post(chat::chat_completions))
+        .route("/agent/run", post(agent::agent_run))
 }
 
 /// Bearer-token extractor enforcing [`auth_token`] policy. Returned by
