@@ -29,9 +29,9 @@ A native-Rust AI agent workspace that codes, automates, remembers, and coordinat
 
 <div align="center">
 
-<video src="https://github.com/thClaws/thClaws/releases/download/v0.23.0/dynamic-workflow-h264.mp4" poster="https://github.com/thClaws/thClaws/releases/download/v0.23.0/dynamic-workflow-poster.jpg" controls muted playsinline width="900"></video>
+<a href="https://github.com/thClaws/thClaws/releases/download/v0.23.0/dynamic-workflow-h264.mp4"><img src="docs/img/dynamic-workflow-thumb.jpg" alt="thClaws v0.23 — dynamic workflows demo (click to play)" width="900" /></a>
 
-*20s demo · `/workflow run summarize each .rs file under thclaws/crates/core/src in one line` → LLM authors JS → you approve → Boa fans out across subagents.*
+*Click to play · 20s demo · `/workflow run summarize each .rs file under thclaws/crates/core/src in one line` → LLM authors JS → you approve → Boa fans out across subagents. ([Full-page version on thclaws.ai](https://thclaws.ai/#dynamic-workflows))*
 
 </div>
 
